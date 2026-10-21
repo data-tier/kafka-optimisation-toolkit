@@ -1,0 +1,21 @@
+# Prometheus scrapes the JMX exporter agent on every broker and controller.
+# The 5 second interval matches the bench/sample.py polling interval.
+global:
+  scrape_interval: 5s
+  scrape_timeout: 4s
+
+scrape_configs:
+  - job_name: kafka
+    static_configs:
+      - targets: ["broker-1:7071"]
+        labels: {node: "broker-1", role: "broker"}
+      - targets: ["broker-2:7071"]
+        labels: {node: "broker-2", role: "broker"}
+      - targets: ["broker-3:7071"]
+        labels: {node: "broker-3", role: "broker"}
+      - targets: ["controller-1:7071"]
+        labels: {node: "controller-1", role: "controller"}
+      - targets: ["controller-2:7071"]
+        labels: {node: "controller-2", role: "controller"}
+      - targets: ["controller-3:7071"]
+        labels: {node: "controller-3", role: "controller"}

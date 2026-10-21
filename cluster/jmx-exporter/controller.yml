@@ -1,0 +1,16 @@
+# Prometheus JMX exporter (jmx_prometheus_javaagent 1.7.0) config for controllers.
+#
+# ActiveControllerCount and OfflinePartitionsCount are registered only on
+# processes whose process.roles includes controller (SharedServer.scala and
+# ControllerServer.scala in the 4.3 source, see SOURCES.md). Dedicated brokers
+# never have them, so the controllers run their own exporter with just these two.
+excludeJvmMetrics: true
+includeObjectNames:
+  - "kafka.controller:type=KafkaController,name=ActiveControllerCount"
+  - "kafka.controller:type=KafkaController,name=OfflinePartitionsCount"
+
+rules:
+  - pattern: 'kafka.controller<type=KafkaController, name=(ActiveControllerCount|OfflinePartitionsCount)><>Value'
+    name: kot_gauge
+    type: GAUGE
+    labels: {mbean: "$1"}

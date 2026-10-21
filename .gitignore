@@ -1,0 +1,18 @@
+# Benchmark output is produced locally and never committed.
+results/*
+!results/.gitkeep
+
+# Scratch space mounted into the client container (payload files, tool logs).
+work/
+
+# Broker overrides written by sweep.sh for read-only broker settings.
+cluster/overrides/*
+!cluster/overrides/.gitkeep
+
+# Python virtual environment for the report.
+.venv/
+__pycache__/
+
+# Migration lab working files (generated configs, state, baseline) and transcripts.
+migration-lab/run/
+migration-lab/transcript-*.log

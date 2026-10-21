@@ -1,0 +1,78 @@
+# Prometheus JMX exporter (jmx_prometheus_javaagent 1.7.0) config for brokers.
+#
+# includeObjectNames is an allowlist: only these MBeans are read. Each name was
+# checked against https://kafka.apache.org/43/operations/monitoring/ and the 4.3
+# source (see SOURCES.md). JVM metrics are excluded so the exporter exposes the
+# listed MBeans and nothing else.
+excludeJvmMetrics: true
+includeObjectNames:
+  - "kafka.network:type=RequestMetrics,name=TotalTimeMs,request=*"
+  - "kafka.network:type=RequestMetrics,name=RequestQueueTimeMs,request=*"
+  - "kafka.network:type=RequestMetrics,name=LocalTimeMs,request=*"
+  - "kafka.network:type=RequestMetrics,name=RemoteTimeMs,request=*"
+  - "kafka.network:type=RequestMetrics,name=ResponseQueueTimeMs,request=*"
+  - "kafka.network:type=RequestMetrics,name=ResponseSendTimeMs,request=*"
+  - "kafka.server:type=KafkaRequestHandlerPool,name=RequestHandlerAvgIdlePercent"
+  - "kafka.network:type=SocketServer,name=NetworkProcessorAvgIdlePercent"
+  - "kafka.network:type=RequestChannel,name=RequestQueueSize"
+  - "kafka.server:type=ReplicaFetcherManager,name=MaxLag,clientId=Replica"
+  - "kafka.server:type=BrokerTopicMetrics,name=BytesInPerSec"
+  - "kafka.server:type=BrokerTopicMetrics,name=BytesOutPerSec"
+  - "kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions"
+  - "kafka.server:type=ReplicaManager,name=UnderMinIsrPartitionCount"
+  - "kafka.server:type=ReplicaManager,name=IsrShrinksPerSec"
+
+# With rules present, attributes that match no rule are not exported. Each rule
+# keeps the MBean name in a label so bench/sample.py can write it back out as-is.
+rules:
+  # Request-time histograms. Kafka registers these as biased (exponentially
+  # decaying) Yammer histograms, so the percentiles weight recent requests.
+  # Max is the largest value since the broker started, not a windowed max.
+  - pattern: 'kafka.network<type=RequestMetrics, name=(\w+), request=(\w+)><>50thPercentile'
+    name: kot_request_time_ms
+    type: GAUGE
+    labels: {mbean: "$1", request: "$2", stat: "p50"}
+  - pattern: 'kafka.network<type=RequestMetrics, name=(\w+), request=(\w+)><>99thPercentile'
+    name: kot_request_time_ms
+    type: GAUGE
+    labels: {mbean: "$1", request: "$2", stat: "p99"}
+  - pattern: 'kafka.network<type=RequestMetrics, name=(\w+), request=(\w+)><>Max'
+    name: kot_request_time_ms
+    type: GAUGE
+    labels: {mbean: "$1", request: "$2", stat: "max"}
+
+  # RequestHandlerAvgIdlePercent is a Meter marked in idle nanoseconds with a
+  # nanosecond rate unit, so its OneMinuteRate is the idle fraction (0 to 1).
+  - pattern: 'kafka.server<type=KafkaRequestHandlerPool, name=(RequestHandlerAvgIdlePercent)><>OneMinuteRate'
+    name: kot_gauge
+    type: GAUGE
+    labels: {mbean: "$1"}
+
+  # Plain gauges.
+  - pattern: 'kafka.network<type=SocketServer, name=(NetworkProcessorAvgIdlePercent)><>Value'
+    name: kot_gauge
+    type: GAUGE
+    labels: {mbean: "$1"}
+  - pattern: 'kafka.network<type=RequestChannel, name=(RequestQueueSize)><>Value'
+    name: kot_gauge
+    type: GAUGE
+    labels: {mbean: "$1"}
+  - pattern: 'kafka.server<type=ReplicaFetcherManager, name=(MaxLag), clientId=Replica><>Value'
+    name: kot_gauge
+    type: GAUGE
+    labels: {mbean: "$1"}
+  - pattern: 'kafka.server<type=ReplicaManager, name=(UnderReplicatedPartitions|UnderMinIsrPartitionCount)><>Value'
+    name: kot_gauge
+    type: GAUGE
+    labels: {mbean: "$1"}
+
+  # Meters are exported as their cumulative Count. bench/sample.py turns them
+  # into per-second rates with PromQL rate() so the rate window is explicit.
+  - pattern: 'kafka.server<type=BrokerTopicMetrics, name=(BytesInPerSec|BytesOutPerSec)><>Count'
+    name: kot_meter_count
+    type: GAUGE
+    labels: {mbean: "$1"}
+  - pattern: 'kafka.server<type=ReplicaManager, name=(IsrShrinksPerSec)><>Count'
+    name: kot_meter_count
+    type: GAUGE
+    labels: {mbean: "$1"}

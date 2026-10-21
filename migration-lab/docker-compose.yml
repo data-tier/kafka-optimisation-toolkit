@@ -1,0 +1,125 @@
+# ZooKeeper-to-KRaft migration lab: a 3-node ZooKeeper ensemble, 3 Kafka
+# 3.9.1 brokers in ZooKeeper mode and 3 KRaft controllers. The controllers are
+# in the "controllers" profile, so `docker compose up` does not start them.
+# 01-provision-controllers.sh formats and starts them.
+#
+# Every node reads its configuration from run/<node>/server.properties, which
+# the step scripts write (see lib.sh). Nothing is published to the host.
+
+name: kot-mig
+
+x-kafka: &kafka
+  image: apache/kafka:3.9.1
+  entrypoint: ["/bin/bash", "/mnt/lab/start-node.sh"]
+  restart: "no"
+
+x-heap: &heap
+  # The lab rehearses a procedure and measures nothing, so heaps are halved
+  # from Kafka's 1 GiB default to fit ten JVMs on a laptop.
+  KAFKA_HEAP_OPTS: "-Xmx512M -Xms512M"
+
+services:
+  zk1:
+    image: zookeeper:3.8.4
+    hostname: zk1
+    environment:
+      ZOO_MY_ID: 1
+      ZOO_SERVERS: server.1=zk1:2888:3888;2181 server.2=zk2:2888:3888;2181 server.3=zk3:2888:3888;2181
+    volumes:
+      - zk1-data:/data
+      - zk1-datalog:/datalog
+  zk2:
+    image: zookeeper:3.8.4
+    hostname: zk2
+    environment:
+      ZOO_MY_ID: 2
+      ZOO_SERVERS: server.1=zk1:2888:3888;2181 server.2=zk2:2888:3888;2181 server.3=zk3:2888:3888;2181
+    volumes:
+      - zk2-data:/data
+      - zk2-datalog:/datalog
+  zk3:
+    image: zookeeper:3.8.4
+    hostname: zk3
+    environment:
+      ZOO_MY_ID: 3
+      ZOO_SERVERS: server.1=zk1:2888:3888;2181 server.2=zk2:2888:3888;2181 server.3=zk3:2888:3888;2181
+    volumes:
+      - zk3-data:/data
+      - zk3-datalog:/datalog
+
+  broker-1:
+    <<: *kafka
+    hostname: broker-1
+    environment: {<<: *heap, LAB_ROLE: broker}
+    volumes:
+      - ./start-node.sh:/mnt/lab/start-node.sh:ro
+      - ./run/broker-1:/mnt/lab/conf:ro
+      - broker-1-data:/var/lib/kafka/data
+    depends_on: [zk1, zk2, zk3]
+  broker-2:
+    <<: *kafka
+    hostname: broker-2
+    environment: {<<: *heap, LAB_ROLE: broker}
+    volumes:
+      - ./start-node.sh:/mnt/lab/start-node.sh:ro
+      - ./run/broker-2:/mnt/lab/conf:ro
+      - broker-2-data:/var/lib/kafka/data
+    depends_on: [zk1, zk2, zk3]
+  broker-3:
+    <<: *kafka
+    hostname: broker-3
+    environment: {<<: *heap, LAB_ROLE: broker}
+    volumes:
+      - ./start-node.sh:/mnt/lab/start-node.sh:ro
+      - ./run/broker-3:/mnt/lab/conf:ro
+      - broker-3-data:/var/lib/kafka/data
+    depends_on: [zk1, zk2, zk3]
+
+  controller-3000:
+    <<: *kafka
+    hostname: controller-3000
+    profiles: [controllers]
+    environment: {<<: *heap, LAB_ROLE: controller}
+    volumes:
+      - ./start-node.sh:/mnt/lab/start-node.sh:ro
+      - ./run/controller-3000:/mnt/lab/conf:ro
+      - controller-3000-data:/var/lib/kafka/data
+  controller-3001:
+    <<: *kafka
+    hostname: controller-3001
+    profiles: [controllers]
+    environment: {<<: *heap, LAB_ROLE: controller}
+    volumes:
+      - ./start-node.sh:/mnt/lab/start-node.sh:ro
+      - ./run/controller-3001:/mnt/lab/conf:ro
+      - controller-3001-data:/var/lib/kafka/data
+  controller-3002:
+    <<: *kafka
+    hostname: controller-3002
+    profiles: [controllers]
+    environment: {<<: *heap, LAB_ROLE: controller}
+    volumes:
+      - ./start-node.sh:/mnt/lab/start-node.sh:ro
+      - ./run/controller-3002:/mnt/lab/conf:ro
+      - controller-3002-data:/var/lib/kafka/data
+
+  # Runs every Kafka CLI tool, so no tool ever shares a JVM port with a node.
+  client:
+    image: apache/kafka:3.9.1
+    hostname: client
+    entrypoint: ["sleep", "infinity"]
+    restart: "no"
+
+volumes:
+  zk1-data:
+  zk1-datalog:
+  zk2-data:
+  zk2-datalog:
+  zk3-data:
+  zk3-datalog:
+  broker-1-data:
+  broker-2-data:
+  broker-3-data:
+  controller-3000-data:
+  controller-3001-data:
+  controller-3002-data:

@@ -1,0 +1,96 @@
+# Three dedicated KRaft controllers, three dedicated brokers, a client
+# container for the perf tools, and Prometheus. Start it with `make cluster-up`.
+#
+# No broker port is published to the host. Every Kafka tool runs inside the
+# client container on the Compose network, so clients reach brokers the same way
+# on every machine. Only Prometheus is published, on 127.0.0.1, for bench/sample.py.
+
+name: kot
+
+x-kafka-node: &kafka-node
+  # Built from cluster/Dockerfile by `make image` (cluster-up runs it first).
+  image: kot-kafka:${KOT_KAFKA_TAG:-4.3.0}
+  pull_policy: never
+  restart: "no"
+
+x-cluster-id: &cluster-id
+  # Any valid base64 UUID works. It is fixed so that a node restarted on an
+  # existing volume always matches the cluster it was formatted for.
+  KOT_CLUSTER_ID: 92o3TbznTViYOiLwNLN65A
+
+services:
+  controller-1:
+    <<: *kafka-node
+    hostname: controller-1
+    environment: {<<: *cluster-id, KOT_NODE: controller-1, KOT_ROLE: controller}
+    volumes:
+      - ./config/controller-1:/opt/kot/config:ro
+      - controller-1-data:/var/lib/kafka/data
+  controller-2:
+    <<: *kafka-node
+    hostname: controller-2
+    environment: {<<: *cluster-id, KOT_NODE: controller-2, KOT_ROLE: controller}
+    volumes:
+      - ./config/controller-2:/opt/kot/config:ro
+      - controller-2-data:/var/lib/kafka/data
+  controller-3:
+    <<: *kafka-node
+    hostname: controller-3
+    environment: {<<: *cluster-id, KOT_NODE: controller-3, KOT_ROLE: controller}
+    volumes:
+      - ./config/controller-3:/opt/kot/config:ro
+      - controller-3-data:/var/lib/kafka/data
+
+  broker-1:
+    <<: *kafka-node
+    hostname: broker-1
+    environment: {<<: *cluster-id, KOT_NODE: broker-1, KOT_ROLE: broker}
+    volumes:
+      - ./config/broker-1:/opt/kot/config:ro
+      - ./overrides:/opt/kot/overrides:ro
+      - broker-1-data:/var/lib/kafka/data
+    depends_on: [controller-1, controller-2, controller-3]
+  broker-2:
+    <<: *kafka-node
+    hostname: broker-2
+    environment: {<<: *cluster-id, KOT_NODE: broker-2, KOT_ROLE: broker}
+    volumes:
+      - ./config/broker-2:/opt/kot/config:ro
+      - ./overrides:/opt/kot/overrides:ro
+      - broker-2-data:/var/lib/kafka/data
+    depends_on: [controller-1, controller-2, controller-3]
+  broker-3:
+    <<: *kafka-node
+    hostname: broker-3
+    environment: {<<: *cluster-id, KOT_NODE: broker-3, KOT_ROLE: broker}
+    volumes:
+      - ./config/broker-3:/opt/kot/config:ro
+      - ./overrides:/opt/kot/overrides:ro
+      - broker-3-data:/var/lib/kafka/data
+    depends_on: [controller-1, controller-2, controller-3]
+
+  # Runs kafka-*.sh tools and the bundled Java tools. It never starts Kafka.
+  client:
+    <<: *kafka-node
+    hostname: client
+    entrypoint: ["sleep", "infinity"]
+    volumes:
+      - ../work:/work
+    depends_on: [broker-1, broker-2, broker-3]
+
+  prometheus:
+    image: prom/prometheus:v3.15.0
+    restart: "no"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "127.0.0.1:${KOT_PROMETHEUS_PORT:-9090}:9090"
+    depends_on: [broker-1, broker-2, broker-3]
+
+volumes:
+  controller-1-data:
+  controller-2-data:
+  controller-3-data:
+  broker-1-data:
+  broker-2-data:
+  broker-3-data:
