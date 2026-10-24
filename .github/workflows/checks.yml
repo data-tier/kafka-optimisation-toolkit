@@ -1,0 +1,74 @@
+# Checks that run on every pull request and every push to main. They cannot
+# run a benchmark (that needs a machine with a lot of memory), so they check
+# everything that can break without one: script syntax and lint, the Python
+# code on the oldest supported version, and the Docker image build, which
+# also compiles the bundled Java tools.
+name: checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  scripts:
+    name: scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check the syntax of every shell script
+        run: |
+          for f in bench/*.sh cluster/*.sh migration-lab/*.sh; do
+            bash -n "$f"
+          done
+
+      - name: Run ShellCheck
+        run: shellcheck -x -S warning bench/*.sh cluster/*.sh migration-lab/*.sh
+
+      - name: sweep.sh prints its help and refuses bad arguments
+        run: |
+          bench/sweep.sh --help > /dev/null
+          expect_refusal() {
+            local message=$1; shift
+            if out=$("$@" 2>&1); then
+              echo "expected '$*' to be refused, but it succeeded"; exit 1
+            fi
+            grep -q "$message" <<<"$out" || { echo "unexpected output from '$*':"; echo "$out"; exit 1; }
+          }
+          expect_refusal "runs must be at least 2" bench/sweep.sh producer linger.ms 0 --runs 1
+          expect_refusal "overwrites max.partition.fetch.bytes" bench/sweep.sh consumer max.partition.fetch.bytes 1
+          expect_refusal "not in bench/broker-update-modes.tsv" bench/sweep.sh broker no.such.setting 1
+
+      - name: Check both Compose files
+        run: |
+          docker compose -f cluster/docker-compose.yml config --quiet
+          docker compose -f migration-lab/docker-compose.yml --profile controllers config --quiet
+
+  python:
+    name: python
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.10"
+
+      - name: Install the report's pinned libraries
+        run: pip install -r requirements.txt
+
+      - name: Compile every Python file
+        run: python -m py_compile bench/*.py bench/tools/*.py
+
+  image:
+    name: image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build the cluster image
+        run: docker build -t kot-kafka:ci -f cluster/Dockerfile --build-arg KAFKA_IMAGE=apache/kafka:4.3.0 .
