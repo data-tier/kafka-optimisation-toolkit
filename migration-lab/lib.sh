@@ -1,5 +1,8 @@
 # Shared helpers for the migration lab scripts. Source it, do not run it.
 # shellcheck shell=bash
+# This file is sourced by the other scripts, which use the variables it
+# defines, so ShellCheck's "appears unused" warning does not apply here.
+# shellcheck disable=SC2034
 
 LAB=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 RUN="$LAB/run"
@@ -182,7 +185,8 @@ show_change() {
 # The controllers' log4j.properties: the image's own file plus the TRACE logger
 # the page recommends for the migration components.
 write_controller_log4j() {
-  local id=$1 f="$RUN/controller-$id/log4j.properties"
+  local id=$1
+  local f="$RUN/controller-$id/log4j.properties"
   mkdir -p "$(dirname "$f")"
   docker run --rm --entrypoint cat apache/kafka:3.9.1 /opt/kafka/config/log4j.properties > "$f"
   printf '\n# Recommended by the 3.9 migration guide while the migration is active.\nlog4j.logger.org.apache.kafka.metadata.migration=TRACE\n' >> "$f"

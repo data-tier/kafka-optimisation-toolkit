@@ -1,5 +1,8 @@
 # Shared helpers for the bench and cluster scripts. Source it, do not run it.
 # shellcheck shell=bash
+# This file is sourced by the other scripts, which use the variables it
+# defines, so ShellCheck's "appears unused" warning does not apply here.
+# shellcheck disable=SC2034
 
 KOT_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 KOT_COMPOSE_FILE="$KOT_ROOT/cluster/docker-compose.yml"

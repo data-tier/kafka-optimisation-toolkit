@@ -14,7 +14,8 @@ echo "start-node: starting with $conf"
 sed 's/^/start-node:   /' "$conf"
 if [[ "$LAB_ROLE" == broker ]]; then
   export JMX_PORT=9999
-  export KAFKA_JMX_OPTS="-Dcom.sun.management.jmxremote=true -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Djava.rmi.server.hostname=$(hostname)"
+  host=$(hostname)
+  export KAFKA_JMX_OPTS="-Dcom.sun.management.jmxremote=true -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Djava.rmi.server.hostname=$host"
 else
   export KAFKA_LOG4J_OPTS="-Dlog4j.configuration=file:/mnt/lab/conf/log4j.properties"
 fi
